@@ -1,12 +1,7 @@
-from serial import Serial
 import time
 import threading
 from imu_parser import IMU_Parser
-
-# Serial Settings
-SERIAL_COM_PORT='COM7'
-SERIAL_BAUD_RATE = 921600
-
+import bluetooth
 
 # Glove State
 GLOVE_STATE_STOP = 0
@@ -20,7 +15,7 @@ GLOVE_CMD_STOP = b'\x00'
 GLOVE_CMD_START = b'\x01'
 GLOVE_CMD_MAG_CAL = b'\x02'
 
-class IMU_Receiver():
+class IMU_Receiver_Bluez():
 
     # status
     b_ready = True
@@ -41,13 +36,11 @@ class IMU_Receiver():
     # parser
     # parser = IMU_Parser
 
-
-
     # -----------------------------
     # constructor
-    def __init__(self, com_port=SERIAL_COM_PORT, baud_rate=SERIAL_BAUD_RATE, check_debug=False, use_offset=False,save_offset=False, offset_file=""):
-        self.com_port = com_port
-        self.baud_rate = baud_rate
+    def __init__(self, mac_address, rfcomm_port=1, check_debug=False, use_offset=False,save_offset=False, offset_file=""):
+        self.mac_address = mac_address
+        self.rfcomm_port = rfcomm_port
         self.check_debug = check_debug
         self.use_offset = use_offset
         self.save_offset = save_offset
@@ -60,9 +53,14 @@ class IMU_Receiver():
     # connect com port
     def com_connect(self):
         # connect
+        #print(self.mac_address)
+        #print(self.rfcomm_port)
+        
         try:
-            self.connection = Serial(self.com_port, self.baud_rate)
-        except:
+            self.connection = bluetooth.BluetoothSocket( bluetooth.RFCOMM )
+            self.connection.connect((self.mac_address, self.rfcomm_port))
+        except Exception as e:
+            print(e)
             print("0.1-Com port open fail")
             return False
         
@@ -93,7 +91,7 @@ class IMU_Receiver():
         self.receiving = True
         
         # start parse process
-        parse_thread = threading.Thread(self._parse_process)
+        parse_thread = threading.Thread(target=self._parse_process)
         parse_thread.start()       
         
         return True
@@ -118,8 +116,9 @@ class IMU_Receiver():
         self.time = time.time()
         while self.receiving:
             # buffer = self.connection.read(2048000)
-            buffer = self.connection.read(1024)
-            self.raw_byte_data = buffer  
+            buffer = self.connection.recv(1024)
+            self.raw_byte_data = buffer
+            print(buffer)  
 
     #-----------------------------
     # UTILITIES
@@ -129,18 +128,20 @@ class IMU_Receiver():
     def _cmd_write(self, cmd):
         cmd_buff = b'\x55'+cmd+b'\x03\x03\x01\x01\x01\x01\x01\x01\xAA'
         try:
-            self.connection.write(bytes(cmd_buff))
-        except:
+            self.connection.send(bytes(cmd_buff))
+        except Exception as e:
+            print(e)
             return False
         
         if cmd == GLOVE_CMD_STOP:
             try:
-                self.connection.read(11)
-            except:
+                self.connection.recv(11)
+            except Exception as e:
+                print(e)
                 return False
 
         elif cmd == GLOVE_CMD_START:
-            return True
+            pass
             # try:
             #     self.connection.read(11)
             # except:
@@ -148,8 +149,9 @@ class IMU_Receiver():
 
         elif cmd == GLOVE_CMD_MAG_CAL:
             try:
-                self.connection.read(11)
-            except:
+                self.connection.recv(11)
+            except Exception as e:
+                print(e)
                 return False
         return True
 
