@@ -1,5 +1,8 @@
-class IMU_Parser():
+from multiprocessing import Queue
 
+PACKET_SIZE = 342
+
+class IMU_Parser():
     # data
     id = 0
     acc = [0,0,0]
@@ -24,6 +27,10 @@ class IMU_Parser():
     ares = 1
     mres = 1
 
+    def __init__(self,input_queue=Queue, output_queue=Queue):
+        self.input_queue = input_queue
+        self.output_queue = output_queue
+
 
     #------------------------------
     # read offset file
@@ -31,3 +38,8 @@ class IMU_Parser():
         with open(path) as f:
             offset_string = f.readline()
         offset = offset_string.split(",")
+
+
+    def parse_process(self):
+        while(True):
+            self.input_queue.get()
