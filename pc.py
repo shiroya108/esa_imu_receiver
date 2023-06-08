@@ -4,6 +4,12 @@ import time
 
 receiver = IMU_Receiver(connection_type="COM", com_port="COM8", baud_rate=9600)
 if receiver.com_connect():
-    time.sleep(5)
+    time.sleep(10)
     receiver.com_disconnect()
-    print("disconnect")
+    print("disconnected")
+    receiver.close_queue()
+    print("queue closed")
+    exit()
+
+    
+
