@@ -1,4 +1,4 @@
-from receiver import IMU_Receiver
+from receiver.receiver import IMU_Receiver
 import time
 
 mac_address = "00:1A:FF:06:5A:24"

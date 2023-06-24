@@ -1,7 +1,9 @@
 from multiprocessing import Queue
+import time
 
 PACKET_SIZE = 342
-MAG_CALI_TIMES = 2000
+MAG_CALI_TIMES = 500
+WRITE_PC_TIMESTAMP = True
 
 class Time():
     _hour = 0
@@ -28,9 +30,10 @@ class IMU():
     acc_offset = [0,0,0]
     gyro_offest = [0,0,0]
     mag_offset = [0,0,0]
-    mag_max = [-32767, -32767, -32767]
-    mag_min = [32767, 32767, 32767]
+    # mag_max = [-32767, -32767, -32767]
+    # mag_min = [32767, 32767, 32767]
     the_mag = [0,0,0]
+    mag_total = [0,0,0]
     calibarated = False
     mag_cali_times = MAG_CALI_TIMES
     processed = 0
@@ -50,22 +53,32 @@ class IMU():
     mres = 10 * 4912 / 32760 # 16 bit, mGauss
     
 
-    def __init__(self, use_mag_offset=False, offset_file="", mag_cali_times=MAG_CALI_TIMES):
-        if use_mag_offset:
+    def __init__(self, use_offset=True, save_offset=True, load_mag_offset=False, offset_file="", mag_cali_times=MAG_CALI_TIMES):
+        if load_mag_offset:
             self.calibarated = True
             self.load_offset(offset_file)
+
+        if not use_offset:
+            self.calibarated = True
+            print(f"Skip Calibration")
+
+        self.use_offset = use_offset
+        self.save_offset = save_offset
         self.mag_cali_times = mag_cali_times
+        self.offset_file = offset_file
 
     #------------------------------
     # set IMU Data
-    def set_data(self, acc, gyro, mag, time):
+    def set_data(self, acc, gyro, mag, time , use_calllback=False, callback=lambda acc,gyro,mag,proc,time,delt,cali_times:None):
         self.processed += 1
         self.calc_acc(acc)
         self.calc_gyro(gyro)
         self.calc_mag(mag)
         self._time.set_time(time[0],time[1],time[2],time[3],time[4])
         self.calc_delt()
-    
+
+        if use_calllback:
+            callback(self.acc,self.gyro,self.mag,self.processed,self._time,self.delt,self.mag_cali_times)
 
      #------------------------------
     # calculations
@@ -87,35 +100,35 @@ class IMU():
     def calc_mag(self,mag):
         for i in range(3):
             twos = mag[2*i] << 8 | mag[2*i+1] & 0xff
-            self.the_mag = self.twos_comp(twos)
+            self.the_mag[i] = self.twos_comp(twos)
             if self.calibarated:
-                self.mag[i] = self.the_mag * self.mres - self.mag_offset[i]
+                self.mag[i] = self.the_mag[i] * self.mres - self.mag_offset[i]
             else:
-                self.mag[i] = self.the_mag * self.mres
+                self.mag[i] = self.the_mag[i] * self.mres
 
     def twos_comp(self,val):
         if (val & (1 << (16 - 1))) != 0: 
             val = val - (1 << 16)
         return val
 
-    def update_mag_offset(self):
-        mag_bias = [0,0,0]
-        # mag_scale = [0,0,0]
-        
+    def update_mag_offset(self):        
         for i in range(3):
-            if self.the_mag[i] > self.mag_max[i]: self.mag_max[i] = self.the_mag[i]
-            if self.the_mag[i] < self.mag_min[i]: self.mag_min[i] = self.the_mag[i]
+            self.mag_total[i] += self.the_mag[i] * self.mres
+            # if self.the_mag[i] > self.mag_max[i]:
+            #     self.mag_max[i] = self.the_mag[i]
+            # if self.the_mag[i] < self.mag_min[i]:
+            #     self.mag_min[i] = self.the_mag[i]
+
+
 
         if self.processed == self.mag_cali_times:
             # hard iron correction
-            mag_bias =[0,0,0]
-            mag_bias[0] = (self.mag_max[0] - self.mag_min[0]) /2
-            mag_bias[1] = (self.mag_max[1] - self.mag_min[1]) /2
-            mag_bias[2] = (self.mag_max[2] - self.mag_min[2]) /2
-
-            self.mag_offset[0] = mag_bias[0] * self.mres
-            self.mag_offset[1] = mag_bias[1] * self.mres
-            self.mag_offset[2] = mag_bias[2] * self.mres
+            # mag_bias[0] = (self.mag_max[0] - self.mag_min[0]) /2
+            # mag_bias[1] = (self.mag_max[1] - self.mag_min[1]) /2
+            # mag_bias[2] = (self.mag_max[2] - self.mag_min[2]) /2
+            self.mag_offset[0] = self.mag_total[0] / self.mag_cali_times
+            self.mag_offset[1] = self.mag_total[1] / self.mag_cali_times
+            self.mag_offset[2] = self.mag_total[2] / self.mag_cali_times
 
             # soft iron correction estimate (not used)
             # mag_scale = mag_bias
@@ -123,13 +136,8 @@ class IMU():
 
             self.calibarated = True
             self.processed = 0
-
-    def print_data(self):
-        print(f"acc:  {self.acc[0]}/{self.acc[1]}/{self.acc[2]}")
-        print(f"gyro: {self.gyro[0]}/{self.gyro[1]}/{self.gyro[2]}")
-        print(f"mag:  {self.mag[0]}/{self.mag[1]}/{self.mag[2]}")
-        print(f"time: {self._time._hour}:{self._time._minute}:{self._time._second}.{self._time._millisecond}")
-
+            self.save_offset_csv()
+            print(f"Calibrated: {self.mag_offset[0]} / {self.mag_offset[0]} / {self.mag_offset[0]}")
 
     def load_offset(self, path):
         with open(path,"r") as f:
@@ -138,12 +146,20 @@ class IMU():
             self.mag_offset[0] = offset_list[0]
             self.mag_offset[1] = offset_list[1]
             self.mag_offset[2] = offset_list[2]    
+            print(f"Loaded Offset: {self.mag_offset[0]} / {self.mag_offset[0]} / {self.mag_offset[0]}")
 
-    def save_offset(self, path):
-        with open(path,"w") as f:
-            csv_str = ",".join([str(n) for n in self.mag_offset])
-            f.write(csv_str)        
+    def save_offset_csv(self):
+        if self.save_offset:
+            with open(self.offset_file,"w") as f:
+                csv_str = ",".join([str(n) for n in self.mag_offset])
+                f.write(csv_str)        
 
     def write_csv(self, file):
-        file.write(f"{self.processed},{self._time._hour},{self._time._minute},{self._time._second},{self._time._millisecond},{self.delt},{self.acc[0]},{self.acc[1]},{self.acc[2]},{self.gyro[0]},{self.gyro[1]},{self.gyro[2]},{self.mag[0]},{self.mag[1]},{self.mag[2]}\n")
+        try:
+            file.write(f"{self.processed},{self._time._hour},{self._time._minute},{self._time._second},{self._time._millisecond},{self.delt},{self.acc[0]},{self.acc[1]},{self.acc[2]},{self.gyro[0]},{self.gyro[1]},{self.gyro[2]},{self.mag[0]},{self.mag[1]},{self.mag[2]}")
+            if WRITE_PC_TIMESTAMP:
+                file.wirte(f"{time.time()}")
+            file.write("\n")
+        except:
+            pass
 

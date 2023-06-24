@@ -1,0 +1,1 @@
+C:/Users/ESA_Lab/anaconda3/python.exe C:\Users\ESA_Lab\Documents\embedded\project\imu_receiver\pc_ui.py
