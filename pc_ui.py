@@ -54,6 +54,7 @@ class Recorder(Ui_ESAIMU_RecorderUI):
                 self._display_imu_values(acc,gyro,mag)
                 self._display_recording_time(time)
                 
+                
 
         def end_writing(rec):
             # play bell sound
@@ -123,7 +124,7 @@ class Recorder(Ui_ESAIMU_RecorderUI):
             self.receiver.create_raw_csv(True,self.SavePath.text()+'/raw_'+self.com_port+".csv")
 
         # Play sound  
-        playsound('./audio/start.mp3',True)
+        playsound('./audio/start.mp3',False)
 
         # set timer if needed
         if self.checkUseTimer.isChecked() and self.RecordingTimeInput.value() > 0:

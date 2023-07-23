@@ -156,10 +156,10 @@ class IMU():
 
     def write_csv(self, file):
         try:
-            file.write(f"{self.processed},{self._time._hour},{self._time._minute},{self._time._second},{self._time._millisecond},{self.delt},{self.acc[0]},{self.acc[1]},{self.acc[2]},{self.gyro[0]},{self.gyro[1]},{self.gyro[2]},{self.mag[0]},{self.mag[1]},{self.mag[2]}")
             if WRITE_PC_TIMESTAMP:
-                file.wirte(f"{time.time()}")
-            file.write("\n")
+                file.write(f"{self.processed},{self._time._hour},{self._time._minute},{self._time._second},{self._time._millisecond},{self.delt},{self.acc[0]},{self.acc[1]},{self.acc[2]},{self.gyro[0]},{self.gyro[1]},{self.gyro[2]},{self.mag[0]},{self.mag[1]},{self.mag[2]},{time.time()}\n")
+            else:
+                file.write(f"{self.processed},{self._time._hour},{self._time._minute},{self._time._second},{self._time._millisecond},{self.delt},{self.acc[0]},{self.acc[1]},{self.acc[2]},{self.gyro[0]},{self.gyro[1]},{self.gyro[2]},{self.mag[0]},{self.mag[1]},{self.mag[2]}\n")
         except:
             pass
 
