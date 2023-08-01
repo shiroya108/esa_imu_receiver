@@ -175,6 +175,7 @@ class Recorder(Ui_ESAIMU_RecorderUI):
         def writing_timer(write_time,use_rec2):
             writing_minute = 0
             while self.receiver.writing_csv:
+                # check every 0.1s
                 time.sleep(0.1)
                 self._display_recording_time()
                 
