@@ -152,6 +152,7 @@ class IMU_Receiver():
     # create csv
     def create_csv(self,write_csv,csv_path):
         self.write_csv = write_csv
+        self.imu.processed = 0
         if write_csv:
             print(csv_path)
             self.csv = open(csv_path,'a')

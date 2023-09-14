@@ -184,13 +184,14 @@ class Recorder(Ui_ESAIMU_RecorderUI):
 
                 # stop writing when time is up
                 if s >= write_time:
-                    self.receiver.stop_write_csv()
-                    if use_rec2:
-                        self.receiver_2.stop_write_csv()
-                    self.RecordButton.setText("Record")
-                    self.RecordButton.clicked.disconnect()
-                    self.RecordButton.clicked.connect(self.write_csv)  
-                    playsound('./audio/end.mp3',False)
+                    self.stop_write_csv()
+                    
+                    # self.receiver.stop_write_csv()
+                    # if use_rec2:
+                    #     self.receiver_2.stop_write_csv()
+                    # self.RecordButton.setText("Record")
+                    # self.RecordButton.clicked.disconnect()
+                    # self.RecordButton.clicked.connect(self.write_csv)  
                     break
             
                 # play sound for every minute
@@ -198,57 +199,72 @@ class Recorder(Ui_ESAIMU_RecorderUI):
                     playsound('./audio/minute.mp3',False)
                     writing_minute = m
         
-        if not hasattr(self,"receiver"):
-            QtWidgets.QMessageBox.information(None,"Error","Connect to COM Port first")
 
-        use_rec2 = hasattr(self,"receiver_2")
+        if not self.receiver.writing_csv:
 
-        if self.SavePath.text() == "":
-            QtWidgets.QMessageBox.information(None,"Error","Select Save Path first")
-            return
-    
-        # create csv file
-        self.receiver.create_csv(True,self.SavePath.text()+'/data_'+self.com_port+".csv")
+            # start writing csv
+            if not hasattr(self,"receiver"):
+                QtWidgets.QMessageBox.information(None,"Error","Connect to COM Port first")
 
-        if self.checkWriteRaw.isChecked():
-            self.receiver.create_raw_csv(True,self.SavePath.text()+'/raw_'+self.com_port+".csv")
+            use_rec2 = hasattr(self,"receiver_2")
 
-        # do same to receiver 2        
-        if use_rec2:
-            self.receiver_2.create_csv(True,self.SavePath.text()+'/data_'+self.com_port_2+".csv")
+            if self.SavePath.text() == "":
+                QtWidgets.QMessageBox.information(None,"Error","Select Save Path first")
+                return
+
+            # create csv file
+            self.receiver.create_csv(True,self.SavePath.text()+'/data_'+self.com_port+".csv")
+
             if self.checkWriteRaw.isChecked():
-                self.receiver_2.create_raw_csv(True,self.SavePath.text()+'/raw_'+self.com_port_2+".csv")
+                self.receiver.create_raw_csv(True,self.SavePath.text()+'/raw_'+self.com_port+".csv")
 
-        # Play sound  
-        playsound('./audio/start.mp3',False)
+            self.receiver.imu.save_offset = True
+            self.receiver.imu.offset_file = self.SavePath.text()+'/offset_'+self.com_port+".csv"
+            self.receiver.imu.save_offset_csv()
 
-        # set timer if needed
-        if self.checkUseTimer.isChecked() and self.RecordingTimeInput.value() > 0:
-            timer_process=threading.Thread(target=writing_timer,args=(self.RecordingTimeInput.value(),use_rec2,))
+            # do same to receiver 2        
+            if use_rec2:
+                self.receiver_2.create_csv(True,self.SavePath.text()+'/data_'+self.com_port_2+".csv")
+                if self.checkWriteRaw.isChecked():
+                    self.receiver_2.create_raw_csv(True,self.SavePath.text()+'/raw_'+self.com_port_2+".csv")
+                self.receiver_2.imu.save_offset = True
+                self.receiver_2.imu.offset_file = self.SavePath.text()+'/offset_'+self.com_port_2+".csv"
+                self.receiver_2.imu.save_offset_csv()
+
+            # Play sound  
+            playsound('./audio/start.mp3',False)
+
+            # set timer if needed
+            if self.checkUseTimer.isChecked() and self.RecordingTimeInput.value() > 0:
+                timer_process=threading.Thread(target=writing_timer,args=(self.RecordingTimeInput.value(),use_rec2,))
 
 
-        self.receiver.start_write_csv(False)
-        # if self.checkUseTimer.isChecked() and self.RecordingTimeInput.value() > 0:
-        #     self.receiver.start_write_csv(True,self.RecordingTimeInput.value())
-        # else:
-        #     self.receiver.start_write_csv(False)
+            self.receiver.start_write_csv(False)
 
-        # do same to receiver 2        
-        if use_rec2:
             # if self.checkUseTimer.isChecked() and self.RecordingTimeInput.value() > 0:
-            #     self.receiver_2.start_write_csv(True,self.RecordingTimeInput.value())
+            #     self.receiver.start_write_csv(True,self.RecordingTimeInput.value())
             # else:
-                self.receiver_2.start_write_csv(False)
+            #     self.receiver.start_write_csv(False)
 
-        # change button to stop
-        if self.receiver.writing_csv:
-            self.start_writing_time = time.time()
-            timer_process.start()
-    
-            self.RecordButton.setText("Stop")
-            self.RecordButton.clicked.disconnect()
-            self.RecordButton.clicked.connect(self.stop_write_csv)
-            
+            # do same to receiver 2        
+            if use_rec2:
+                # if self.checkUseTimer.isChecked() and self.RecordingTimeInput.value() > 0:
+                #     self.receiver_2.start_write_csv(True,self.RecordingTimeInput.value())
+                # else:
+                    self.receiver_2.start_write_csv(False)
+
+            # change button to stop
+            if self.receiver.writing_csv:
+                self.start_writing_time = time.time()
+                timer_process.start()
+                self.RecordButton.setText("Stop")
+                # self.RecordButton.clicked.disconnect()
+                # self.RecordButton.clicked.connect(self.stop_write_csv)
+        
+        else:
+            # stop writing csv
+            self.stop_write_csv()
+
 
     def stop_write_csv(self):
         # stop writing
@@ -259,8 +275,9 @@ class Recorder(Ui_ESAIMU_RecorderUI):
             self.receiver_2.stop_write_csv()
 
         self.RecordButton.setText("Record")
-        self.RecordButton.clicked.disconnect()
-        self.RecordButton.clicked.connect(self.write_csv)  
+        # self.RecordButton.clicked.disconnect()
+        # self.RecordButton.clicked.connect(self.write_csv)
+        playsound('./audio/end.mp3',False)  
 
     def _display_imu_values(self,acc,gyro,mag):
         self.ax.setText(f"{acc[0]:0,.3f}")

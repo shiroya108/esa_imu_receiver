@@ -25,8 +25,8 @@ def receive_callback(acc,gyro,mag,proc,time,delt,cali_times):
     print(f"time: {time._hour}:{time._minute}:{time._second}.{time._millisecond}")
     print(f"processed: {proc} / delta: {delt}")
 
-
-receiver = IMU_Receiver(connection_type="COM", com_port="COM7", baud_rate=9600, use_offset=True, save_offset=True, offset_path="offset.csv", write_csv=True, write_raw_csv=True, calibration_callback=calibration_callback,finish_calibration_callback=finish_calibration_callback, receive_callback=receive_callback)
+com_port = "COM25"
+receiver = IMU_Receiver(connection_type="COM", com_port=com_port, baud_rate=9600, packet_size=342,  use_offset=True, save_offset=True, offset_path="offset.csv", write_csv=True, write_raw_csv=True, calibration_callback=calibration_callback,finish_calibration_callback=finish_calibration_callback, receive_callback=receive_callback, csv_path="imu_"+com_port+".csv", raw_csv_path="raw_"+com_port+".csv")
 if receiver.com_connect():
     receiver.start_write_csv()
     

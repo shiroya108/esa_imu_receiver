@@ -1,5 +1,5 @@
 from serial import Serial
-import bluetooth
+# import bluetooth
 
 class Connection():
     type = 0
