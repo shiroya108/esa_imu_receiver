@@ -7,6 +7,7 @@ from playsound import playsound
 import math
 import threading
 import time
+from random_actions import RandomActions
 
 class Recorder(Ui_ESAIMU_RecorderUI):
     receive_count = 0
@@ -172,15 +173,19 @@ class Recorder(Ui_ESAIMU_RecorderUI):
 
 
     def write_csv(self):
-        def writing_timer(write_time,use_rec2):
+        def writing_timer(write_time,use_rec2,use_random_actions):
             writing_minute = 0
+            
             while self.receiver.writing_csv:
                 # check every 0.1s
                 time.sleep(0.1)
-                self._display_recording_time()
+                self._display_recording_time(use_random_actions)
                 
                 s = math.floor(self.writing_time)
-                m = math.floor(s/60)               
+                m = math.floor(s/60)  
+
+                # if self.use_random_actions:
+
 
                 # stop writing when time is up
                 if s >= write_time:
@@ -195,9 +200,10 @@ class Recorder(Ui_ESAIMU_RecorderUI):
                     break
             
                 # play sound for every minute
-                if self.writing_time >= 60 and write_time - self.writing_time >= 10 and writing_minute != m :
-                    playsound('./audio/minute.mp3',False)
-                    writing_minute = m
+                if not use_random_actions:
+                    if self.writing_time >= 60 and write_time - self.writing_time >= 10 and writing_minute != m :
+                        playsound('./audio/minute.mp3',False)
+                        writing_minute = m
         
 
         if not self.receiver.writing_csv:
@@ -234,9 +240,22 @@ class Recorder(Ui_ESAIMU_RecorderUI):
             # Play sound  
             playsound('./audio/start.mp3',False)
 
+
+           
+
+            use_random_actions = False
+            if self.checkUseRandomAction.isChecked():
+                use_random_actions=True
+                self.random_actions = RandomActions(self.RecordingTimeInput.value())
+                self.random_actions.randomize_action()
+                self.random_actions.generate_csv(self.SavePath.text()+"/actions.csv")
+
             # set timer if needed
             if self.checkUseTimer.isChecked() and self.RecordingTimeInput.value() > 0:
-                timer_process=threading.Thread(target=writing_timer,args=(self.RecordingTimeInput.value(),use_rec2,))
+                timer_process=threading.Thread(target=writing_timer,args=(self.RecordingTimeInput.value(),use_rec2,use_random_actions,))
+                 # generate random actions
+            
+            
 
 
             self.receiver.start_write_csv(False)
@@ -256,7 +275,8 @@ class Recorder(Ui_ESAIMU_RecorderUI):
             # change button to stop
             if self.receiver.writing_csv:
                 self.start_writing_time = time.time()
-                timer_process.start()
+                if self.checkUseTimer.isChecked():
+                    timer_process.start()
                 self.RecordButton.setText("Stop")
                 # self.RecordButton.clicked.disconnect()
                 # self.RecordButton.clicked.connect(self.stop_write_csv)
@@ -302,7 +322,7 @@ class Recorder(Ui_ESAIMU_RecorderUI):
         self.my_2.setText(f"{mag[1]:0,.3f}")
         self.mz_2.setText(f"{mag[2]:0,.3f}")
 
-    def _display_recording_time(self):
+    def _display_recording_time(self,use_random_actions):
         if self.receiver.writing_csv:
             current_time = time.time()
             self.writing_time = current_time - self.start_writing_time
@@ -312,6 +332,8 @@ class Recorder(Ui_ESAIMU_RecorderUI):
             m = math.floor(self.writing_time / 60) 
            
             self.RecordTime.setText(f"{m}:{s:02}.{ms:03}")
+            if use_random_actions:
+                self.random_actions.voice_action(self.writing_time)
 
     # exit window
     def close(self,event):

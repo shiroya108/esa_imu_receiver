@@ -1,8 +1,8 @@
 from multiprocessing import Queue
 import time
 
-PACKET_SIZE = 342
-MAG_CALI_TIMES = 500
+PACKET_SIZE = 36
+MAG_CALI_TIMES = 2000
 WRITE_PC_TIMESTAMP = True
 
 class Time():
@@ -30,8 +30,9 @@ class IMU():
     acc_offset = [0,0,0]
     gyro_offest = [0,0,0]
     mag_offset = [0,0,0]
-    # mag_max = [-32767, -32767, -32767]
-    # mag_min = [32767, 32767, 32767]
+    mag_scale = [1,1,1]
+    mag_max = [-32767, -32767, -32767]
+    mag_min = [32767, 32767, 32767]
     the_mag = [0,0,0]
     mag_total = [0,0,0]
     calibarated = False
@@ -102,7 +103,7 @@ class IMU():
             twos = mag[2*i] << 8 | mag[2*i+1] & 0xff
             self.the_mag[i] = self.twos_comp(twos)
             if self.calibarated:
-                self.mag[i] = self.the_mag[i] * self.mres - self.mag_offset[i]
+                self.mag[i] = (self.the_mag[i] * self.mres - self.mag_offset[i]) * self.mag_scale[i]
             else:
                 self.mag[i] = self.the_mag[i] * self.mres
 
@@ -113,7 +114,9 @@ class IMU():
 
     def update_mag_offset(self):        
         for i in range(3):
-            self.mag_total[i] += self.the_mag[i] * self.mres
+            # self.mag_total[i] += self.the_mag[i] * self.mres
+            self.mag_max[i] = max( self.mag_max[i], self.the_mag[i])
+            self.mag_min[i] = min( self.mag_min[i] , self.the_mag[i])
             # if self.the_mag[i] > self.mag_max[i]:
             #     self.mag_max[i] = self.the_mag[i]
             # if self.the_mag[i] < self.mag_min[i]:
@@ -121,37 +124,52 @@ class IMU():
 
 
 
-        if self.processed == self.mag_cali_times:
+        if self.processed >= self.mag_cali_times:
             # hard iron correction
-            # mag_bias[0] = (self.mag_max[0] - self.mag_min[0]) /2
-            # mag_bias[1] = (self.mag_max[1] - self.mag_min[1]) /2
-            # mag_bias[2] = (self.mag_max[2] - self.mag_min[2]) /2
-            self.mag_offset[0] = self.mag_total[0] / self.mag_cali_times
-            self.mag_offset[1] = self.mag_total[1] / self.mag_cali_times
-            self.mag_offset[2] = self.mag_total[2] / self.mag_cali_times
+            self.mag_offset[0] = (self.mag_max[0] + self.mag_min[0]) /2
+            self.mag_offset[1] = (self.mag_max[1] + self.mag_min[1]) /2
+            self.mag_offset[2] = (self.mag_max[2] + self.mag_min[2]) /2
+            # self.mag_offset[0] = self.mag_total[0] / self.mag_cali_times
+            # self.mag_offset[1] = self.mag_total[1] / self.mag_cali_times
+            # self.mag_offset[2] = self.mag_total[2] / self.mag_cali_times
 
-            # soft iron correction estimate (not used)
-            # mag_scale = mag_bias
-            # avg_rad = sum(mag_scale)/3
+            # soft iron correction estimate
+            self.mag_scale[0] = (self.mag_max[0] - self.mag_min[0]) /2
+            self.mag_scale[1] = (self.mag_max[1] - self.mag_min[1]) /2
+            self.mag_scale[2] = (self.mag_max[2] - self.mag_min[2]) /2
+            avg_rad = sum(self.mag_scale)/3
+            for i in range(3):
+                self.mag_scale[i] = avg_rad / self.mag_scale[i]
 
             self.calibarated = True
             self.processed = 0
             self.save_offset_csv()
-            print(f"Calibrated: {self.mag_offset[0]} / {self.mag_offset[0]} / {self.mag_offset[0]}")
+            print(f"Max: {self.mag_max[0]} / {self.mag_max[1]} / {self.mag_max[2]}")
+            print(f"Min: {self.mag_min[0]} / {self.mag_min[1]} / {self.mag_max[2]}")
+            print(f"Offset: {self.mag_offset[0]} / {self.mag_offset[1]} / {self.mag_offset[2]} ")
+            print(f"Scale: {self.mag_scale[0]} / {self.mag_scale[1]} / {self.mag_scale[2]}")
 
     def load_offset(self, path):
         with open(path,"r") as f:
             offset_str = f.read()
             offset_list = offset_str.split(",")
-            self.mag_offset[0] = offset_list[0]
-            self.mag_offset[1] = offset_list[1]
-            self.mag_offset[2] = offset_list[2]    
-            print(f"Loaded Offset: {self.mag_offset[0]} / {self.mag_offset[0]} / {self.mag_offset[0]}")
+            self.mag_offset[0] = float(offset_list[0])
+            self.mag_offset[1] = float(offset_list[1])
+            self.mag_offset[2] = float(offset_list[2])   
+
+            if len(offset_list) >= 6:
+                self.mag_scale[0] = float(offset_list[3])
+                self.mag_scale[1] = float(offset_list[4])
+                self.mag_scale[2] = float(offset_list[5])
+
+            print(f"Loaded Offset: {self.mag_offset[0]} / {self.mag_offset[1]} / {self.mag_offset[2]} / {self.mag_scale[0]} / {self.mag_scale[1]} / {self.mag_scale[2]}")
 
     def save_offset_csv(self):
         if self.save_offset:
             with open(self.offset_file,"w") as f:
-                csv_str = ",".join([str(n) for n in self.mag_offset])
+                offset_data = self.mag_offset.copy()
+                offset_data.extend(self.mag_scale)
+                csv_str = ",".join([str(n) for n in offset_data])
                 f.write(csv_str)        
 
     def write_csv(self, file):
